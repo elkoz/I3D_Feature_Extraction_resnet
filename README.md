@@ -1,4 +1,4 @@
-# I3D_Feature_Extraction_resnet
+# I3D for Action Segmentation
 This repo contains code to extract I3D features with resnet50 backbone given a folder of videos and a folder of tracking 
 files.
 

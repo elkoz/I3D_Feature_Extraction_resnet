@@ -8,7 +8,7 @@ adapted for extracting frame-wise features and using tracking files.
 
 ## Overview
 For each of your videos, the following will happen.
-1. If you provide the `tracking_folder` and `tracking_suffix` options, the corresponding tracking file will be opened. 
+1. If you set the `tracking_folder` and `tracking_suffix` options, the corresponding tracking file will be opened. 
 If the video is named `some_video.mp4`, the tracking file should be at `tracking_folder/some_video{tracking_suffix}`. 
 For instance, if `tracking_suffix=_detections.pickle`, it would be `tracking_folder/some_video_detections.pickle`. 
 The tracking file should be a pickled nested dictionary where first-level keys are individual ids, second-level keys

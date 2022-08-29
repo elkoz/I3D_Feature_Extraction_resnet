@@ -119,7 +119,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min_frames",
         type=int,
-        default=0,
+        default=9,
         help="Tracklets shorter than this number of frames will be omitted",
     )
     parser.add_argument(

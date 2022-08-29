@@ -1,4 +1,4 @@
-# I3D for Action Segmentation
+# I3D Features for Action Segmentation
 This repo contains code to extract I3D features with resnet50 backbone given a folder of videos and a folder of tracking 
 files.
 
@@ -20,7 +20,7 @@ If you don't provide tracking information, the video will not be cropped. Before
 to `(video_w, video_h)` if you set those options (you need to set both).
 3. The output will saved at `outputpath/some_video.npy` as a dictionary where keys are individual ids (`""` if there's 
 no tracking) and values are `numpy` arrays of shape `(N, 2048)`. If you use the `--pad` option and set frequency to 1, 
-`N` dimension will be the number of frames.
+the `N` dimension will be the number of frames.
 
 ## Usage
 ### Setup

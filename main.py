@@ -4,47 +4,153 @@ import argparse
 import numpy as np
 import time
 import ffmpeg
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.optim import lr_scheduler
-from torch.autograd import Variable
-import torchvision
 from extract_features import run
-from resnet import i3_res50
+from utils.resnet import i3_res50
 import os
+import pickle
 
 
-def generate(datasetpath, outputpath, pretrainedpath, frequency, batch_size, sample_mode):
-	Path(outputpath).mkdir(parents=True, exist_ok=True)
-	temppath = outputpath+ "/temp/"
-	rootdir = Path(datasetpath)
-	videos = [str(f) for f in rootdir.glob('**/*.mp4')]
-	# setup the model
-	i3d = i3_res50(400, pretrainedpath)
-	i3d.cuda()
-	i3d.train(False)  # Set model to evaluate mode
-	for video in videos:
-		videoname = video.split("/")[-1].split(".")[0]
-		startime = time.time()
-		print("Generating for {0}".format(video))
-		Path(temppath).mkdir(parents=True, exist_ok=True)
-		ffmpeg.input(video).output('{}%d.jpg'.format(temppath),start_number=0).global_args('-loglevel', 'quiet').run()
-		print("Preprocessing done..")
-		features = run(i3d, frequency, temppath, batch_size, sample_mode)
-		np.save(outputpath + "/" + videoname, features)
-		print("Obtained features of size: ", features.shape)
-		shutil.rmtree(temppath)
-		print("done in {0}.".format(time.time() - startime))
+def generate(
+    datasetpath,
+    outputpath,
+    pretrainedpath,
+    frequency,
+    batch_size,
+    sample_mode,
+    video_w,
+    video_h,
+    detection_folder=None,
+    detection_suffix=None,
+    min_frames=0,
+    pad=False,
+):
+    Path(outputpath).mkdir(parents=True, exist_ok=True)
+    temppath = outputpath + "/temp/"
+    rootdir = Path(datasetpath)
+    videos = [str(f) for f in rootdir.glob("**/*.mp4")]
+    # setup the model
+    i3d = i3_res50(400, pretrainedpath)
+    i3d.cuda()
+    i3d.train(False)  # Set model to evaluate mode
+    for i, video in enumerate(videos):
+        videoname = video.split("/")[-1].split(".")[0]
+        startime = time.time()
+        print("Generating for {0} ({1} / {2})".format(video, i + 1, len(videos)))
+        Path(temppath).mkdir(parents=True, exist_ok=True)
+        ffmpeg.input(video).output(
+            "{}%d.jpg".format(temppath), start_number=0
+        ).global_args("-loglevel", "quiet").run()
+        print("Preprocessing done..")
+        if detection_folder is not None and detection_suffix is not None:
+            detection_file = os.path.join(
+                detection_folder, videoname + detection_suffix
+            )
+            with open(detection_file, "rb") as f:
+                detection = pickle.load(f)
+        else:
+            detection = {"": None}
+        features = {}
+        for key, value in detection.items():
+            if value is None or len(value) >= min_frames:
+                print("KEY=", key)
+                features[key] = run(
+                    i3d,
+                    frequency,
+                    temppath,
+                    batch_size,
+                    sample_mode,
+                    value,
+                    pad,
+                    video_w,
+                    video_h,
+                )
+        np.save(outputpath + "/" + videoname + "_i3d.npy", features)
+        shutil.rmtree(temppath)
+        print("done in {0}.".format(time.time() - startime))
 
-if __name__ == '__main__': 
-	parser = argparse.ArgumentParser()
-	parser.add_argument('--datasetpath', type=str, default="samplevideos/")
-	parser.add_argument('--outputpath', type=str, default="output")
-	parser.add_argument('--pretrainedpath', type=str, default="pretrained/i3d_r50_kinetics.pth")
-	parser.add_argument('--frequency', type=int, default=16)
-	parser.add_argument('--batch_size', type=int, default=20)
-	parser.add_argument('--sample_mode', type=str, default="oversample")
-	args = parser.parse_args()
-	generate(args.datasetpath, str(args.outputpath), args.pretrainedpath, args.frequency, args.batch_size, args.sample_mode)    
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--datasetpath",
+        type=str,
+        default="samplevideos/",
+        help="The path to a folder containing the videos",
+    )
+    parser.add_argument(
+        "--outputpath",
+        type=str,
+        default="output",
+        help="The path to a folder where the output will be saved (in .npy format)",
+    )
+    parser.add_argument(
+        "--pretrainedpath",
+        type=str,
+        default="pretrained/i3d_r50_kinetics.pth",
+        help="The path to a .pth checkpoint file",
+    )
+    parser.add_argument(
+        "--frequency",
+        type=int,
+        default=1,
+        help="The distance between the starts of neighboring input chunks",
+    )
+    parser.add_argument("--batch_size", type=int, default=20, help="Batch size")
+    parser.add_argument(
+        "--sample_mode",
+        type=str,
+        default="oversample",
+        help="Either 'oversample' or 'crop_center'",
+    )
+    parser.add_argument(
+        "--tracking_folder",
+        type=str,
+        required=False,
+        help="The path to the folder containing tracking files",
+    )
+    parser.add_argument(
+        "--tracking_suffix",
+        type=str,
+        required=False,
+        help="The suffix of the tracking files (for some_video.mp4 the corresponding tracking file should be named some_video{suffix},"
+        "e.g. some_video_detection.pickle, if tracking_suffix is _detection.pickle), see github README for more information"
+        "on the format",
+    )
+    parser.add_argument(
+        "--min_frames",
+        type=int,
+        default=0,
+        help="Tracklets shorter than this number of frames will be omitted",
+    )
+    parser.add_argument(
+        "--pad",
+        action="store_true",
+        help="If True, the output features will be padded with the edge values to keep the length intact",
+    )
+    parser.add_argument(
+        "--video_w",
+        type=int,
+        required=False,
+        help="The video width (it will be resized to this value before cropping)",
+    )
+    parser.add_argument(
+        "--video_h",
+        type=int,
+        required=False,
+        help="The video height (it will be resized to this value before cropping)",
+    )
+    args = parser.parse_args()
+    generate(
+        args.datasetpath,
+        str(args.outputpath),
+        args.pretrainedpath,
+        args.frequency,
+        args.batch_size,
+        args.sample_mode,
+        args.video_w,
+        args.video_h,
+        args.tracking_folder,
+        args.tracking_suffix,
+        args.min_frames,
+        args.pad,
+    )

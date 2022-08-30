@@ -103,6 +103,7 @@ def run(
     )
     frame_cnt = len(rgb_files)
     start = int(rgb_files[0].split(".")[0])
+    end = int(rgb_files[-1].split(".")[0])
     assert frame_cnt > chunk_size
     clipped_length = frame_cnt - chunk_size
     clipped_length = (
@@ -152,13 +153,14 @@ def run(
     full_features = [np.expand_dims(i, axis=0) for i in full_features]
     full_features = np.concatenate(full_features, axis=0)
     full_features = full_features[:, :, :, 0, 0, 0]
-    full_features = np.array(full_features).transpose([1, 0, 2]).squeeze()
+    full_features = np.array(full_features).transpose([1, 0, 2]).mean(1).squeeze()
     if pad:
         shape = full_features.shape[0]
         left_pad = (frame_cnt - shape) // 2
         right_pad = (frame_cnt - shape) - left_pad
+        print(f'full_features.shape=', full_features.shape)
         full_features = np.pad(
             full_features, ((left_pad, right_pad), (0, 0)), mode="edge"
         )
     print("full_features.shape={}".format(full_features.shape))
-    return full_features
+    return full_features, start, end

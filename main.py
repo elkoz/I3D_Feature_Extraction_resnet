@@ -23,6 +23,7 @@ def generate(
     detection_suffix=None,
     min_frames=0,
     pad=False,
+    save_metadata=False,
 ):
     Path(outputpath).mkdir(parents=True, exist_ok=True)
     temppath = outputpath + "/temp/"
@@ -50,10 +51,12 @@ def generate(
         else:
             detection = {"": None}
         features = {}
+        min_frames_dict = {}
+        max_frames_dict = {}
         for key, value in detection.items():
             if value is None or len(value) >= min_frames:
                 print("KEY=", key)
-                features[key] = run(
+                features[key], min_frames_dict[key], max_frames_dict[key] = run(
                     i3d,
                     frequency,
                     temppath,
@@ -64,6 +67,9 @@ def generate(
                     video_w,
                     video_h,
                 )
+        if save_metadata:
+            features["min_frames"] = min_frames_dict
+            features["max_frames"] = max_frames_dict
         np.save(outputpath + "/" + videoname + "_i3d.npy", features)
         shutil.rmtree(temppath)
         print("done in {0}.".format(time.time() - startime))
@@ -99,8 +105,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--sample_mode",
         type=str,
-        default="oversample",
-        help="Either 'oversample' or 'crop_center'",
+        default="center_crop",
+        help="Either 'oversample' or 'center_crop'",
     )
     parser.add_argument(
         "--tracking_folder",
@@ -139,6 +145,11 @@ if __name__ == "__main__":
         required=False,
         help="The video height (it will be resized to this value before cropping)",
     )
+    parser.add_argument(
+        "--save_metadata",
+        action="store_true",
+        help="If true, save a dictionary of min and max frames",
+    )
     args = parser.parse_args()
     generate(
         args.datasetpath,
@@ -153,4 +164,5 @@ if __name__ == "__main__":
         args.tracking_suffix,
         args.min_frames,
         args.pad,
+        args.save_metadata
     )

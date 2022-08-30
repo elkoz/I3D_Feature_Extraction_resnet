@@ -24,6 +24,7 @@ def generate(
     min_frames=0,
     pad=False,
     save_metadata=False,
+    i3d_suffix="_i3d.npy"
 ):
     Path(outputpath).mkdir(parents=True, exist_ok=True)
     temppath = outputpath + "/temp/"
@@ -70,7 +71,7 @@ def generate(
         if save_metadata:
             features["min_frames"] = min_frames_dict
             features["max_frames"] = max_frames_dict
-        np.save(outputpath + "/" + videoname + "_i3d.npy", features)
+        np.save(outputpath + "/" + videoname + i3d_suffix, features)
         shutil.rmtree(temppath)
         print("done in {0}.".format(time.time() - startime))
 
@@ -150,6 +151,12 @@ if __name__ == "__main__":
         action="store_true",
         help="If true, save a dictionary of min and max frames",
     )
+    parser.add_argument(
+        "--i3d_suffix",
+        type=str,
+        default="i3d_suffix",
+        help="The suffix to add to the output files",
+    )
     args = parser.parse_args()
     generate(
         args.datasetpath,
@@ -164,5 +171,6 @@ if __name__ == "__main__":
         args.tracking_suffix,
         args.min_frames,
         args.pad,
-        args.save_metadata
+        args.save_metadata,
+        args.i3d_suffix
     )

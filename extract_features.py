@@ -158,7 +158,6 @@ def run(
         shape = full_features.shape[0]
         left_pad = (frame_cnt - shape) // 2
         right_pad = (frame_cnt - shape) - left_pad
-        print(f'full_features.shape=', full_features.shape)
         full_features = np.pad(
             full_features, ((left_pad, right_pad), (0, 0)), mode="edge"
         )

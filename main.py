@@ -154,7 +154,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--i3d_suffix",
         type=str,
-        default="i3d_suffix",
+        default="_i3d.npy",
         help="The suffix to add to the output files",
     )
     args = parser.parse_args()

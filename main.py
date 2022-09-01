@@ -31,7 +31,7 @@ def generate(
     rootdir = Path(datasetpath)
     videos = [str(f) for f in rootdir.glob("**/*.mp4")]
     if detection_folder is not None and detection_suffix is not None:
-        videos = [x for x in videos if os.path.exists(os.path.join(detection_folder, f'{x.split(".")[0]}{detection_suffix}'))]
+        videos = [x for x in videos if os.path.exists(os.path.join(detection_folder, f'{os.path.basename(x).split(".")[0]}{detection_suffix}'))]
     # setup the model
     i3d = i3_res50(400, pretrainedpath)
     i3d.cuda()

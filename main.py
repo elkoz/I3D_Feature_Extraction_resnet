@@ -24,8 +24,11 @@ def generate(
     min_frames=0,
     pad=False,
     save_metadata=False,
-    i3d_suffix="_i3d.npy"
+    i3d_suffix="_i3d.npy",
+    gpu=0
 ):
+    device = f'cuda:{gpu}'
+    print('device', device)
     Path(outputpath).mkdir(parents=True, exist_ok=True)
     temppath = outputpath + "/temp/"
     rootdir = Path(datasetpath)
@@ -34,7 +37,7 @@ def generate(
         videos = [x for x in videos if os.path.exists(os.path.join(detection_folder, f'{os.path.basename(x).split(".")[0]}{detection_suffix}'))]
     # setup the model
     i3d = i3_res50(400, pretrainedpath)
-    i3d.cuda()
+    i3d.to(device)
     i3d.train(False)  # Set model to evaluate mode
     for i, video in enumerate(videos):
         videoname = video.split("/")[-1].split(".")[0]
@@ -69,6 +72,7 @@ def generate(
                     pad,
                     video_w,
                     video_h,
+                    device
                 )
         if save_metadata:
             features["min_frames"] = min_frames_dict
@@ -159,6 +163,12 @@ if __name__ == "__main__":
         default="_i3d.npy",
         help="The suffix to add to the output files",
     )
+    parser.add_argument(
+        "--gpu",
+        type=int,
+        default=0,
+        help="The index of the gpu to use",
+    )
     args = parser.parse_args()
     generate(
         args.datasetpath,
@@ -174,5 +184,6 @@ if __name__ == "__main__":
         args.min_frames,
         args.pad,
         args.save_metadata,
-        args.i3d_suffix
+        args.i3d_suffix,
+        args.gpu
     )

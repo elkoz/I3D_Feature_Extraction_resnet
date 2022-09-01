@@ -8,15 +8,19 @@ from natsort import natsorted
 from PIL import Image
 from torch.autograd import Variable
 from collections import defaultdict
+import cv2
+from pathos.multiprocessing import ProcessingPool
 
 
 def load_frame(frame_file, bbox, video_w, video_h):
-    data = Image.open(frame_file)
+    # data = Image.open(frame_file)
+    data = cv2.imread(frame_file)
     if bbox is not None:
         if video_w is not None and video_h is not None:
-            data = data.resize((video_w, video_h), Image.ANTIALIAS)
-        data = data.crop(bbox)
-    data = data.resize((340, 256), Image.ANTIALIAS)
+            data = cv2.resize(data, (video_w, video_h))
+        x1, y1, x2, y2 = [int(x) for x in bbox]
+        data = data[y1: y2, x1: x2]
+    data = cv2.resize(data, (340, 256))
     data = np.array(data)
     data = data.astype(float)
     data = (data * 2 / 255) - 1
@@ -30,15 +34,16 @@ def load_rgb_batch(
 ):
     if detection is None:
         detection = defaultdict(lambda: None)
-    batch_data = np.zeros(frame_indices.shape + (256, 340, 3))
-    for i in range(frame_indices.shape[0]):
-        for j in range(frame_indices.shape[1]):
-            batch_data[i, j, :, :, :] = load_frame(
-                os.path.join(frames_dir, rgb_files[frame_indices[i][j] - start]),
-                detection[frame_indices[i][j]],
+    def func(idx):
+        return load_frame(
+                os.path.join(frames_dir, rgb_files[idx - start]),
+                detection[idx],
                 video_w,
                 video_h,
             )
+    batch_data = ProcessingPool().map(func, frame_indices.flatten())
+    batch_data = np.stack(batch_data, axis=0)
+    batch_data = batch_data.reshape((*frame_indices.shape, *batch_data.shape[1:]))
     return batch_data
 
 
@@ -81,6 +86,7 @@ def run(
     pad=False,
     video_w=1024,
     video_h=576,
+    device="cuda:1"
 ):
     assert sample_mode in ["oversample", "center_crop"]
     chunk_size = 8
@@ -89,7 +95,7 @@ def run(
         b_data = b_data.transpose([0, 4, 1, 2, 3])
         b_data = torch.from_numpy(b_data)  # b,c,t,h,w  # 40x3x16x224x224
         with torch.no_grad():
-            b_data = Variable(b_data.cuda()).float()
+            b_data = Variable(b_data.to(device)).float()
             inp = {"frames": b_data}
             features = i3d(inp)
         return features.cpu().numpy()

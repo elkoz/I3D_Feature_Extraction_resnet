@@ -18,9 +18,9 @@ are frame indices (without any frames missing between start and end!) and values
 to a pre-trained model in 8-frame chunks with the frequency you set in the options (each chunk maps to one frame feature).
 If you don't provide tracking information, the video will not be cropped. Before the cropping, we will resize the video
 to `(video_w, video_h)` if you set those options (you need to set both).
-3. The output will saved at `outputpath/some_video.npy` as a dictionary where keys are individual ids (`""` if there's 
+3. By default, the output will be saved at `outputpath/some_video_i3d.npy` as a dictionary where keys are individual ids (`""` if there's 
 no tracking) and values are `numpy` arrays of shape `(N, 2048)`. If you use the `--pad` option and set frequency to 1, 
-the `N` dimension will be the original number of frames.
+the `N` dimension will be the original number of frames. You can change the filename by setting the `i3d_suffix` parameter.
 
 ## Usage
 ### Setup

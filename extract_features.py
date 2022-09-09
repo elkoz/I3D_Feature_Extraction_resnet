@@ -4,17 +4,13 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
 import numpy as np
 import torch
-from natsort import natsorted
-from PIL import Image
 from torch.autograd import Variable
 from collections import defaultdict
 import cv2
-from pathos.multiprocessing import ProcessingPool
+from tqdm import tqdm
 
 
-def load_frame(frame_file, bbox, video_w, video_h):
-    # data = Image.open(frame_file)
-    data = cv2.imread(frame_file)
+def load_frame(data, bbox, video_w, video_h):
     if bbox is not None:
         if video_w is not None and video_h is not None:
             data = cv2.resize(data, (video_w, video_h))
@@ -30,18 +26,20 @@ def load_frame(frame_file, bbox, video_w, video_h):
 
 
 def load_rgb_batch(
-    frames_dir, rgb_files, frame_indices, detection, video_w, video_h, start
+    frame_indices, detection, video_w, video_h, start, lazy_imread
 ):
     if detection is None:
         detection = defaultdict(lambda: None)
     def func(idx):
         return load_frame(
-                os.path.join(frames_dir, rgb_files[idx - start]),
+                lazy_imread(idx - start),
+                # os.path.join(frames_dir, rgb_files[idx - start]),
                 detection[idx],
                 video_w,
                 video_h,
             )
-    batch_data = ProcessingPool().map(func, frame_indices.flatten())
+    # batch_data = ProcessingPool().map(func, range(len(batch_data)))
+    batch_data = [func(i) for i in frame_indices.flatten()]
     batch_data = np.stack(batch_data, axis=0)
     batch_data = batch_data.reshape((*frame_indices.shape, *batch_data.shape[1:]))
     return batch_data
@@ -86,7 +84,9 @@ def run(
     pad=False,
     video_w=1024,
     video_h=576,
-    device="cuda:1"
+    device="cuda:1",
+    lazy_imread=None,
+    frame_cnt=None,
 ):
     assert sample_mode in ["oversample", "center_crop"]
     chunk_size = 8
@@ -100,16 +100,13 @@ def run(
             features = i3d(inp)
         return features.cpu().numpy()
 
-    rgb_files = natsorted(
-        [
-            i
-            for i in os.listdir(frames_dir)
-            if detection is None or int(i.split(".")[0]) in detection
-        ]
-    )
-    frame_cnt = len(rgb_files)
-    start = int(rgb_files[0].split(".")[0])
-    end = int(rgb_files[-1].split(".")[0])
+    if detection is None:
+        start = 0
+        end = frame_cnt - 1
+    else:
+        keys = sorted(list(detection.keys()))
+        start = keys[0]
+        end = keys[-1]
     assert frame_cnt > chunk_size
     clipped_length = frame_cnt - chunk_size
     clipped_length = (
@@ -130,15 +127,14 @@ def run(
     else:
         full_features = [[]]
 
-    for batch_id in range(batch_num):
+    for batch_id in tqdm(range(batch_num)):
         batch_data = load_rgb_batch(
-            frames_dir,
-            rgb_files,
             frame_indices[batch_id],
             detection,
             video_w,
             video_h,
             start,
+            lazy_imread
         )
         if sample_mode == "oversample":
             batch_data_ten_crop = oversample_data(batch_data)

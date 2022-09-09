@@ -8,6 +8,9 @@ from extract_features import run
 from utils.resnet import i3_res50
 import os
 import pickle
+from pims import PyAVReaderIndexed
+from dask import delayed
+from dask_image.imread import imread
 
 
 def generate(
@@ -43,10 +46,10 @@ def generate(
         videoname = video.split("/")[-1].split(".")[0]
         startime = time.time()
         print("Generating for {0} ({1} / {2})".format(video, i + 1, len(videos)))
-        Path(temppath).mkdir(parents=True, exist_ok=True)
-        ffmpeg.input(video).output(
-            "{}%d.jpg".format(temppath), start_number=0
-        ).global_args("-loglevel", "quiet").run()
+        stream = PyAVReaderIndexed(video)
+        lazy_imread = stream.get_frame
+        length = len(stream)
+        print(f'LENGTH {len(stream)}')
         print("Preprocessing done..")
         if detection_folder is not None and detection_suffix is not None:
             detection_file = os.path.join(
@@ -55,24 +58,24 @@ def generate(
             with open(detection_file, "rb") as f:
                 detection = pickle.load(f)
         else:
-            detection = {"": None}
+            detection = {"ind0": None}
         features = {}
         min_frames_dict = {}
         max_frames_dict = {}
         for key, value in detection.items():
             if value is None or len(value) >= min_frames:
-                print("KEY=", key)
                 features[key], min_frames_dict[key], max_frames_dict[key] = run(
                     i3d,
                     frequency,
-                    temppath,
                     batch_size,
                     sample_mode,
                     value,
                     pad,
                     video_w,
                     video_h,
-                    device
+                    device,
+                    lazy_imread,
+                    length
                 )
         if save_metadata:
             features["min_frames"] = min_frames_dict
@@ -108,7 +111,7 @@ if __name__ == "__main__":
         default=1,
         help="The distance between the starts of neighboring input chunks",
     )
-    parser.add_argument("--batch_size", type=int, default=20, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
     parser.add_argument(
         "--sample_mode",
         type=str,

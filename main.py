@@ -3,14 +3,12 @@ import shutil
 import argparse
 import numpy as np
 import time
-import ffmpeg
 from extract_features import run
 from utils.resnet import i3_res50
 import os
 import pickle
 from pims import PyAVReaderIndexed
-from dask import delayed
-from dask_image.imread import imread
+from tqdm import tqdm
 
 
 def generate(
@@ -28,8 +26,13 @@ def generate(
     pad=False,
     save_metadata=False,
     i3d_suffix="_i3d.npy",
-    gpu=0
+    gpu=0,
+    background_extraction=False,
 ):
+    if outputpath is None:
+        outputpath = datasetpath
+    if detection_folder is None:
+        detection_folder = datasetpath
     device = f'cuda:{gpu}'
     print('device', device)
     Path(outputpath).mkdir(parents=True, exist_ok=True)
@@ -51,6 +54,15 @@ def generate(
         length = len(stream)
         print(f'LENGTH {len(stream)}')
         print("Preprocessing done..")
+        mean_frame = None
+        if background_extraction:
+            mean_frame = 0
+            count = 0
+            print('Computing the mean frame...')
+            for f_i in tqdm(range(length)):
+                mean_frame += np.array(lazy_imread(f_i), dtype=np.float)
+                count += 1
+            mean_frame /= count
         if detection_folder is not None and detection_suffix is not None:
             detection_file = os.path.join(
                 detection_folder, videoname + detection_suffix
@@ -64,18 +76,23 @@ def generate(
         max_frames_dict = {}
         for key, value in detection.items():
             if value is None or len(value) >= min_frames:
+                if value is None:
+                    clip_len = length
+                else:
+                    clip_len = len(value)
                 features[key], min_frames_dict[key], max_frames_dict[key] = run(
-                    i3d,
-                    frequency,
-                    batch_size,
-                    sample_mode,
-                    value,
-                    pad,
-                    video_w,
-                    video_h,
-                    device,
-                    lazy_imread,
-                    length
+                    i3d=i3d,
+                    frequency=frequency,
+                    batch_size=batch_size,
+                    sample_mode=sample_mode,
+                    detection=value,
+                    pad=pad,
+                    video_w=video_w,
+                    video_h=video_h,
+                    device=device,
+                    lazy_imread=lazy_imread,
+                    frame_cnt=clip_len,
+                    mean_frame=mean_frame
                 )
         if save_metadata:
             features["min_frames"] = min_frames_dict
@@ -172,21 +189,27 @@ if __name__ == "__main__":
         default=0,
         help="The index of the gpu to use",
     )
+    parser.add_argument(
+        "--subtract_background",
+        action="store_true",
+        help="Subtract the average frame before the extraction",
+    )
     args = parser.parse_args()
     generate(
-        args.datasetpath,
-        str(args.outputpath),
-        args.pretrainedpath,
-        args.frequency,
-        args.batch_size,
-        args.sample_mode,
-        args.video_w,
-        args.video_h,
-        args.tracking_folder,
-        args.tracking_suffix,
-        args.min_frames,
-        args.pad,
-        args.save_metadata,
-        args.i3d_suffix,
-        args.gpu
+        datasetpath=args.datasetpath,
+        outputpath=str(args.outputpath),
+        pretrainedpath=args.pretrainedpath,
+        frequency=args.frequency,
+        batch_size=args.batch_size,
+        sample_mode=args.sample_mode,
+        video_w=args.video_w,
+        video_h=args.video_h,
+        detection_folder=args.tracking_folder,
+        detection_suffix=args.tracking_suffix,
+        min_frames=args.min_frames,
+        pad=args.pad,
+        save_metadata=args.save_metadata,
+        i3d_suffix=args.i3d_suffix,
+        gpu=args.gpu,
+        background_extraction=args.subtract_background,
     )

@@ -26,13 +26,19 @@ def load_frame(data, bbox, video_w, video_h):
 
 
 def load_rgb_batch(
-    frame_indices, detection, video_w, video_h, start, lazy_imread
+    frame_indices, detection, video_w, video_h, start, lazy_imread, mean_frame,
 ):
     if detection is None:
         detection = defaultdict(lambda: None)
     def func(idx):
+        data = np.array(lazy_imread(idx - start), dtype=np.float)
+        if mean_frame is not None:
+            data -= mean_frame
+            data += 128
+            data[data < 0] = 0
+            data[data > 255] = 255
         return load_frame(
-                lazy_imread(idx - start),
+                data,
                 # os.path.join(frames_dir, rgb_files[idx - start]),
                 detection[idx],
                 video_w,
@@ -77,7 +83,6 @@ def oversample_data(data):
 def run(
     i3d,
     frequency,
-    frames_dir,
     batch_size,
     sample_mode,
     detection=None,
@@ -87,6 +92,7 @@ def run(
     device="cuda:1",
     lazy_imread=None,
     frame_cnt=None,
+    mean_frame=None,
 ):
     assert sample_mode in ["oversample", "center_crop"]
     chunk_size = 8
@@ -98,7 +104,7 @@ def run(
             b_data = Variable(b_data.to(device)).float()
             inp = {"frames": b_data}
             features = i3d(inp)
-        return features.cpu().numpy()
+        return features.detach().cpu().numpy()
 
     if detection is None:
         start = 0
@@ -134,7 +140,8 @@ def run(
             video_w,
             video_h,
             start,
-            lazy_imread
+            lazy_imread,
+            mean_frame,
         )
         if sample_mode == "oversample":
             batch_data_ten_crop = oversample_data(batch_data)

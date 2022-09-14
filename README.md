@@ -3,7 +3,7 @@ This repo contains code to extract I3D features with resnet50 backbone given a f
 files.
 
 ## Credits
-This code is a version of [this repository](https://github.com/GowthamGottimukkala/I3D_Feature_Extraction_resnet)
+This is a version of [this repository](https://github.com/GowthamGottimukkala/I3D_Feature_Extraction_resnet)
 adapted for extracting frame-wise features and using tracking files.
 
 ## Overview

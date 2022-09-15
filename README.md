@@ -48,7 +48,7 @@ python -m utils.convert_weights pretrained/i3d_baseline_32x2_IN_pretrain_400k.pk
 --video_h:              video height (it will be resized to this value before cropping to the bounding boxes)
 --save_metadata:        if true, min and max frame dictionaries will also be saved
 --i3d_suffix:           the suffix to add to the output files
---subtract_background:  if true, the mean frame of the video is subtracted before the feature extraction
+--subtract_background:  if true, the median frame of the video is set to gray before the feature extraction
 </pre>
 
 ### Run

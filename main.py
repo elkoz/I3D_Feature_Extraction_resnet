@@ -9,6 +9,7 @@ import os
 import pickle
 from pims import PyAVReaderIndexed
 from tqdm import tqdm
+import cv2
 
 
 def generate(
@@ -28,6 +29,7 @@ def generate(
     i3d_suffix="_i3d.npy",
     gpu=0,
     background_extraction=False,
+    expand_bboxes=True
 ):
     if outputpath is None:
         outputpath = datasetpath
@@ -56,13 +58,13 @@ def generate(
         print("Preprocessing done..")
         mean_frame = None
         if background_extraction:
-            mean_frame = 0
-            count = 0
+            frames = []
             print('Computing the mean frame...')
-            for f_i in tqdm(range(length)):
-                mean_frame += np.array(lazy_imread(f_i), dtype=np.float)
-                count += 1
-            mean_frame /= count
+            for f_i in tqdm(range(0, length, 200)):
+                frames.append(np.array(lazy_imread(f_i), dtype=np.float))
+            frames = np.stack(frames, 0)
+            mean_frame = np.median(frames, axis=0)
+            mean_frame = cv2.cvtColor(mean_frame.astype(np.float32), cv2.COLOR_BGR2GRAY)
         if detection_folder is not None and detection_suffix is not None:
             detection_file = os.path.join(
                 detection_folder, videoname + detection_suffix
@@ -80,25 +82,28 @@ def generate(
                     clip_len = length
                 else:
                     clip_len = len(value)
-                features[key], min_frames_dict[key], max_frames_dict[key] = run(
-                    i3d=i3d,
-                    frequency=frequency,
-                    batch_size=batch_size,
-                    sample_mode=sample_mode,
-                    detection=value,
-                    pad=pad,
-                    video_w=video_w,
-                    video_h=video_h,
-                    device=device,
-                    lazy_imread=lazy_imread,
-                    frame_cnt=clip_len,
-                    mean_frame=mean_frame
-                )
+                try:
+                    features[key], min_frames_dict[key], max_frames_dict[key] = run(
+                        i3d=i3d,
+                        frequency=frequency,
+                        batch_size=batch_size,
+                        sample_mode=sample_mode,
+                        detection=value,
+                        pad=pad,
+                        video_w=video_w,
+                        video_h=video_h,
+                        device=device,
+                        lazy_imread=lazy_imread,
+                        frame_cnt=clip_len,
+                        mean_frame=mean_frame,
+                        expand_bboxes=(sample_mode == "expand_bboxes"),
+                    )
+                except Exception as e:
+                    print(e)
         if save_metadata:
             features["min_frames"] = min_frames_dict
             features["max_frames"] = max_frames_dict
         np.save(outputpath + "/" + videoname + i3d_suffix, features)
-        shutil.rmtree(temppath)
         print("done in {0}.".format(time.time() - startime))
 
 
@@ -132,8 +137,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--sample_mode",
         type=str,
-        default="center_crop",
-        help="Either 'oversample' or 'center_crop'",
+        default="expand_bboxes",
+        help="Either 'oversample', 'expand_bboxes' or 'center_crop'",
     )
     parser.add_argument(
         "--tracking_folder",
@@ -192,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--subtract_background",
         action="store_true",
-        help="Subtract the average frame before the extraction",
+        help="If true, the median frame of the video is set to gray before the feature extraction",
     )
     args = parser.parse_args()
     generate(

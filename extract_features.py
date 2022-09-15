@@ -10,13 +10,37 @@ import cv2
 from tqdm import tqdm
 
 
-def load_frame(data, bbox, video_w, video_h):
+def load_frame(data, bbox, video_w, video_h, expand_bboxes):
     if bbox is not None:
         if video_w is not None and video_h is not None:
             data = cv2.resize(data, (video_w, video_h))
         x1, y1, x2, y2 = [int(x) for x in bbox]
+        if expand_bboxes:
+            if y2 - y1 < x2 - x1:
+                pad = ((x2 - x1) - (y2 - y1)) / 2
+                y1 -= pad
+                y2 += pad
+                if y1 < 0:
+                    y2 -= y1
+                    y1 = 0
+                elif y2 > data.shape[0]:
+                    y1 -= (y2 - data.shape[0])
+                    y2 = data.shape[0]
+            else:
+                pad = ((y2 - y1) - (x2 - x1)) / 2
+                x1 -= pad
+                x2 += pad
+                if x1 < 0:
+                    x2 -= x1
+                    x1 = 0
+                elif x2 > data.shape[1]:
+                    x1 -= (x2 - data.shape[1])
+                    x2 = data.shape[1]
         data = data[y1: y2, x1: x2]
-    data = cv2.resize(data, (340, 256))
+    if not expand_bboxes:
+        data = cv2.resize(data, (340, 256))
+    else:
+        data = cv2.resize(data, (224, 224))
     data = np.array(data)
     data = data.astype(float)
     data = (data * 2 / 255) - 1
@@ -26,23 +50,23 @@ def load_frame(data, bbox, video_w, video_h):
 
 
 def load_rgb_batch(
-    frame_indices, detection, video_w, video_h, start, lazy_imread, mean_frame,
+    frame_indices, detection, video_w, video_h, start, lazy_imread, mean_frame, expand_bboxes
 ):
     if detection is None:
         detection = defaultdict(lambda: None)
     def func(idx):
         data = np.array(lazy_imread(idx - start), dtype=np.float)
         if mean_frame is not None:
-            data -= mean_frame
-            data += 128
-            data[data < 0] = 0
-            data[data > 255] = 255
+            dframe = cv2.absdiff(cv2.cvtColor(data.astype(np.float32), cv2.COLOR_BGR2GRAY), mean_frame)
+            _, mask = cv2.threshold(dframe, 15, 255, cv2.THRESH_BINARY)
+            data[mask == 0] = 128
         return load_frame(
                 data,
                 # os.path.join(frames_dir, rgb_files[idx - start]),
                 detection[idx],
                 video_w,
                 video_h,
+                expand_bboxes
             )
     # batch_data = ProcessingPool().map(func, range(len(batch_data)))
     batch_data = [func(i) for i in frame_indices.flatten()]
@@ -93,6 +117,7 @@ def run(
     lazy_imread=None,
     frame_cnt=None,
     mean_frame=None,
+    expand_bboxes=True,
 ):
     assert sample_mode in ["oversample", "center_crop"]
     chunk_size = 8
@@ -142,8 +167,15 @@ def run(
             start,
             lazy_imread,
             mean_frame,
+            expand_bboxes
         )
-        if sample_mode == "oversample":
+        if sample_mode == "expand_bboxes":
+            assert batch_data.shape[-2] == 224
+            assert batch_data.shape[-3] == 224
+            temp = forward_batch(batch_data)
+            full_features[0].append(temp)
+
+        elif sample_mode == "oversample":
             batch_data_ten_crop = oversample_data(batch_data)
             for i in range(10):
                 assert batch_data_ten_crop[i].shape[-2] == 224

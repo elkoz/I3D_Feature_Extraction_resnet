@@ -36,18 +36,19 @@ python -m utils.convert_weights pretrained/i3d_baseline_32x2_IN_pretrain_400k.pk
 
 ### Parameters
 <pre>
---datasetpath:       folder of input videos (contains videos or subdirectories of videos)
---outputpath:        folder of extracted features
---frequency:         number of frames between adjacent snippets
---batch_size:        batch size for snippets
---tracking_folder:   path to the folder containing tracking files
---tracking_suffix:   suffix of the tracking files
---min_frames:        tracklets shorter than this number of frames will be omitted
---pad:               if true, the output features will be padded with the edge values to keep the length intact
---video_w:           video width (it will be resized to this value before cropping to the bounding boxes)
---video_h:           video height (it will be resized to this value before cropping to the bounding boxes)
---save_metadata:     if true, min and max frame dictionaries will also be saved
---i3d_suffix:        the suffix to add to the output files
+--datasetpath:          folder of input videos (contains videos or subdirectories of videos)
+--outputpath:           folder of extracted features
+--frequency:            number of frames between adjacent snippets
+--batch_size:           batch size for snippets
+--tracking_folder:      path to the folder containing tracking files
+--tracking_suffix:      suffix of the tracking files
+--min_frames:           tracklets shorter than this number of frames will be omitted
+--pad:                  if true, the output features will be padded with the edge values to keep the length intact
+--video_w:              video width (it will be resized to this value before cropping to the bounding boxes)
+--video_h:              video height (it will be resized to this value before cropping to the bounding boxes)
+--save_metadata:        if true, min and max frame dictionaries will also be saved
+--i3d_suffix:           the suffix to add to the output files
+--subtract_background:  if true, the mean frame of the video is subtracted before the feature extraction
 </pre>
 
 ### Run
